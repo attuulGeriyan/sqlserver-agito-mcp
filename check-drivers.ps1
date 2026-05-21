@@ -13,5 +13,9 @@ if ($drivers.Count -eq 0) {
 }
 
 Write-Host ""
-Write-Host "Testing LocalDB instance status..." -ForegroundColor Cyan
-sqllocaldb info SQLLocalEXP01
+Write-Host "Listing all LocalDB instances on this machine..." -ForegroundColor Cyan
+sqllocaldb info
+
+# To inspect a specific instance:
+#   sqllocaldb info <instance-name>
+# e.g. sqllocaldb info MSSQLLocalDB

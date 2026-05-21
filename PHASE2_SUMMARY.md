@@ -272,7 +272,7 @@ const getConnectionString = (database: string) =>
 
 ### 1. Rebuild (Already Done)
 ```bash
-cd C:\Users\AttuulGeriyan\Documents\Claude\sqlserver-agito-mcp
+cd <path-to-sqlserver-agito-mcp>
 npm run build
 ```
 

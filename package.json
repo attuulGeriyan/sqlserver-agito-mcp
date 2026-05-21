@@ -1,7 +1,7 @@
 {
   "name": "sqlserver-agito-mcp",
-  "version": "0.3.0",
-  "description": "MCP server for SQL Server - Agito Robot Project (Phase 3: Advanced Operations)",
+  "version": "0.4.0",
+  "description": "MCP server for SQL Server - Agito Robot Project (Phase 4: Dynamic Discovery)",
   "type": "module",
   "main": "build/index.js",
   "scripts": {

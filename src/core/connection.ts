@@ -1,27 +1,32 @@
-import { getEnvironment, type EnvironmentConfig } from "../config/environments.js";
+import {
+  canonicalDatabaseName,
+  getDatabases,
+  getEnvironment,
+  isDatabaseAvailable,
+} from "../config/environments.js";
 
 // Generate connection string for a specific database
 export const getConnectionString = (database: string, environment: string = "LOCAL"): string => {
   const env = getEnvironment(environment);
 
-  // Check if database is available in this environment
-  if (!env.databases.includes(database)) {
-    throw new Error(
-      `Database '${database}' is not available in environment '${environment}'. ` +
-      `Available databases: ${env.databases.join(", ")}`
-    );
+  // Validate against the dynamically-discovered database list
+  if (!isDatabaseAvailable(environment, database)) {
+    const available = getDatabases(environment);
+    const hint = available.length
+      ? `Available databases: ${available.join(", ")}`
+      : `No databases discovered yet for '${environment}' — server discovery may have failed.`;
+    throw new Error(`Database '${database}' is not available in environment '${environment}'. ${hint}`);
   }
 
-  // Build connection string based on authentication type
+  const canonical = canonicalDatabaseName(environment, database);
+
   if (env.authentication === "windows") {
-    return `Driver={ODBC Driver 17 for SQL Server};Server=${env.server};Database=${database};Trusted_Connection=Yes;`;
-  } else {
-    // SQL authentication
-    if (!env.username || !env.password) {
-      throw new Error(`SQL authentication requires username and password for environment '${environment}'`);
-    }
-    return `Driver={ODBC Driver 17 for SQL Server};Server=${env.server};Database=${database};UID=${env.username};PWD=${env.password};`;
+    return `Driver={ODBC Driver 17 for SQL Server};Server=${env.server};Database=${canonical};Trusted_Connection=Yes;`;
   }
+  if (!env.username || !env.password) {
+    throw new Error(`SQL authentication requires username and password for environment '${environment}'`);
+  }
+  return `Driver={ODBC Driver 17 for SQL Server};Server=${env.server};Database=${canonical};UID=${env.username};PWD=${env.password};`;
 };
 
 // Get connection string for multi-environment operations

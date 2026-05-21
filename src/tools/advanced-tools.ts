@@ -671,8 +671,11 @@ export const advancedToolDefinitions = [
       properties: {
         database: {
           type: "string",
-          enum: ["TestRobot", "WCSTest", "MTMCore", "MTMRobot", "MTMDHLScheduler", "MTMFives", "MTMERPTMS"],
-          description: "Which database to query (default: TestRobot)",
+          description: "Exact database name. Call list_databases to see what's available. If omitted, supply 'project' instead.",
+        },
+        project: {
+          type: "string",
+          description: "Project name (e.g. 'RobotiMaster'). MCP resolves it to the matching DB (e.g. 'MTMRobot'). Ignored when 'database' is supplied.",
         },
         schema: {
           type: "string",
@@ -694,8 +697,11 @@ export const advancedToolDefinitions = [
       properties: {
         database: {
           type: "string",
-          enum: ["TestRobot", "WCSTest", "MTMCore", "MTMRobot", "MTMDHLScheduler", "MTMFives", "MTMERPTMS"],
-          description: "Which database (default: TestRobot)",
+          description: "Exact database name. Call list_databases to see what's available. If omitted, supply 'project' instead.",
+        },
+        project: {
+          type: "string",
+          description: "Project name (e.g. 'RobotiMaster'). MCP resolves it to the matching DB (e.g. 'MTMRobot'). Ignored when 'database' is supplied.",
         },
         procedure_name: {
           type: "string",
@@ -718,8 +724,11 @@ export const advancedToolDefinitions = [
       properties: {
         database: {
           type: "string",
-          enum: ["TestRobot", "WCSTest", "MTMCore", "MTMRobot", "MTMDHLScheduler", "MTMFives", "MTMERPTMS"],
-          description: "Which database to analyze (default: TestRobot)",
+          description: "Exact database name. Call list_databases to see what's available. If omitted, supply 'project' instead.",
+        },
+        project: {
+          type: "string",
+          description: "Project name (e.g. 'RobotiMaster'). MCP resolves it to the matching DB (e.g. 'MTMRobot'). Ignored when 'database' is supplied.",
         },
         table_name: {
           type: "string",
@@ -758,8 +767,11 @@ export const advancedToolDefinitions = [
         },
         database: {
           type: "string",
-          enum: ["TestRobot", "WCSTest", "MTMCore", "MTMRobot", "MTMDHLScheduler", "MTMFives", "MTMERPTMS"],
-          description: "Which database to use for verification queries (default: TestRobot)",
+          description: "Exact database name. Call list_databases to see what's available. If omitted, supply 'project' instead.",
+        },
+        project: {
+          type: "string",
+          description: "Project name (e.g. 'RobotiMaster'). MCP resolves it to the matching DB (e.g. 'MTMRobot'). Ignored when 'database' is supplied.",
         },
       },
       required: ["backup_file_path"],
@@ -874,8 +886,11 @@ export const advancedToolDefinitions = [
       properties: {
         database: {
           type: "string",
-          enum: ["TestRobot", "WCSTest", "MTMCore", "MTMRobot", "MTMDHLScheduler", "MTMFives", "MTMERPTMS"],
-          description: "Which database to check (default: TestRobot)",
+          description: "Exact database name. Call list_databases to see what's available. If omitted, supply 'project' instead.",
+        },
+        project: {
+          type: "string",
+          description: "Project name (e.g. 'RobotiMaster'). MCP resolves it to the matching DB (e.g. 'MTMRobot'). Ignored when 'database' is supplied.",
         },
         table_name: {
           type: "string",
@@ -909,8 +924,11 @@ export const advancedToolDefinitions = [
       properties: {
         database: {
           type: "string",
-          enum: ["TestRobot", "WCSTest", "MTMCore", "MTMRobot", "MTMDHLScheduler", "MTMFives", "MTMERPTMS"],
-          description: "Which database to check (default: TestRobot)",
+          description: "Exact database name. Call list_databases to see what's available. If omitted, supply 'project' instead.",
+        },
+        project: {
+          type: "string",
+          description: "Project name (e.g. 'RobotiMaster'). MCP resolves it to the matching DB (e.g. 'MTMRobot'). Ignored when 'database' is supplied.",
         },
         compare_to_environment: {
           type: "string",
@@ -932,8 +950,11 @@ export const advancedToolDefinitions = [
         },
         database: {
           type: "string",
-          enum: ["TestRobot", "WCSTest", "MTMCore", "MTMRobot", "MTMDHLScheduler", "MTMFives", "MTMERPTMS"],
-          description: "Which database to query (default: TestRobot)",
+          description: "Exact database name. Call list_databases to see what's available. If omitted, supply 'project' instead.",
+        },
+        project: {
+          type: "string",
+          description: "Project name (e.g. 'RobotiMaster'). MCP resolves it to the matching DB (e.g. 'MTMRobot'). Ignored when 'database' is supplied.",
         },
         provide_schema_context: {
           type: "boolean",
@@ -964,8 +985,11 @@ export const advancedToolDefinitions = [
         },
         database: {
           type: "string",
-          enum: ["TestRobot", "WCSTest", "MTMCore", "MTMRobot", "MTMDHLScheduler", "MTMFives", "MTMERPTMS"],
-          description: "Which database (default: TestRobot)",
+          description: "Exact database name. Call list_databases to see what's available. If omitted, supply 'project' instead.",
+        },
+        project: {
+          type: "string",
+          description: "Project name (e.g. 'RobotiMaster'). MCP resolves it to the matching DB (e.g. 'MTMRobot'). Ignored when 'database' is supplied.",
         },
         record_count: {
           type: "number",

@@ -4,7 +4,7 @@ MCP (Model Context Protocol) server for SQL Server LocalDB, designed for the Agi
 
 ## Version
 
-**v0.3.0 - Phase 3: Advanced Operations**
+**v0.4.0 - Phase 4: Dynamic Discovery**
 
 ## Features
 
@@ -66,14 +66,25 @@ src/
 
 ### Multi-Environment Support
 
-The server supports multiple environments with dynamic database configuration:
+The server supports multiple environments. The `LOCAL` server target is read at startup from the `SQLSERVER_HOST` environment variable — there is no hardcoded server, so each developer points the MCP at their own SQL Server instance.
 
-- **LOCAL**: LocalDB instance for development (`(localdb)\SQLLocalEXP01`)
-- **ISIT**: Integration testing environment (placeholder for future connection)
-- **PreProd**: Pre-production environment (placeholder)
-- **PROD**: Production environment (read-only, placeholder)
+- **LOCAL**: configured per-developer via `SQLSERVER_HOST` (e.g. `(localdb)\MSSQLLocalDB`, `localhost`, `localhost\SQLEXPRESS`)
+- **ISIT / PreProd / PROD**: register additional environments in `src/config/environments.ts` as your team needs them
 
-Databases like **MTMRobot** and **MTMCore** can be configured dynamically without code changes.
+### Dynamic Database Discovery
+
+The list of databases is **not hardcoded**. On startup the server queries `sys.databases` on the configured SQL Server and caches every user database (system DBs — `master`, `tempdb`, `model`, `msdb` — are excluded). Adding a new database to the server makes it instantly available to the MCP; call `list_databases` with `refresh: true` to pick up changes without restarting.
+
+### Project-to-Database Resolution
+
+Every database-aware tool accepts either an explicit `database` or a `project` name. When you pass `project: "RobotiMaster"` the server resolves to `MTMRobot` by:
+
+1. Checking `MCP_PROJECT_OVERRIDES` (env var, JSON map of explicit overrides)
+2. Exact `MTM<project>` match (e.g. `HFGStack` → `MTMHFGStack`)
+3. Raw `<project>` match
+4. Fuzzy stem match against `MTM*` databases (e.g. `RobotiMaster` shares the `Robot` stem with `MTMRobot`)
+
+`MTMCore` is treated as a shared database and is reported alongside the resolved project DB. Use the `resolve_project` tool to preview the resolution for any project name.
 
 ## Safety Features
 
@@ -513,35 +524,32 @@ AI-assisted realistic test data generation with FK dependency awareness.
 ## Configuration
 
 ### Databases
-The server supports dynamic database configuration:
-- **TestRobot** - Primary test database (default)
-- **WCSTest** - Secondary test database
-- **MTMRobot** - Source of truth for robot operations schema
-- **MTMCore** - Source of truth for core warehouse schema
-
-Additional databases can be added to the environment configuration without code changes.
+Databases are discovered at runtime from `sys.databases` on the configured SQL Server. There is **no hardcoded list** — whatever exists on your server is automatically available. Call `list_databases` to see what was discovered, or `list_databases` with `refresh: true` to re-query after creating a new database.
 
 ### Environments
-Configure multiple environments in `src/config/environments.ts`:
+The `LOCAL` environment is defined in `src/config/environments.ts` and reads its server from `SQLSERVER_HOST`. To add ISIT / PreProd / PROD, register them in the same file:
 
 ```typescript
-{
+export const environments: Record<string, EnvironmentConfig> = {
   LOCAL: {
-    server: "(localdb)\\SQLLocalEXP01",
-    databases: ["TestRobot", "WCSTest", "MTMCore", "MTMRobot"],
-    authentication: "windows"
+    name: "LOCAL",
+    server: localServer, // from SQLSERVER_HOST
+    authentication: "windows",
   },
-  ISIT: { ... },  // Placeholder for integration testing
-  PreProd: { ... },  // Placeholder for pre-production
-  PROD: { readonly: true, ... }  // Read-only production access
-}
+  ISIT: {
+    name: "ISIT",
+    server: "isit-server.company.com",
+    authentication: "windows",
+    readonly: true,
+  },
+};
 ```
 
 ### Connection
-- **Server**: `(localdb)\SQLLocalEXP01` (LOCAL environment)
+- **Server**: read from `SQLSERVER_HOST` (required — no default)
 - **Authentication**: Windows Trusted Connection
 - **Driver**: ODBC Driver 17 for SQL Server
-- **Multi-environment**: Configurable per environment
+- **Multi-environment**: register additional environments in code as needed
 
 ### Truncate Whitelist
 Edit `TRUNCATE_WHITELIST` in `src/config/constants.ts` to add tables:
@@ -558,27 +566,60 @@ const TRUNCATE_WHITELIST = [
 
 ## Installation
 
-1. Install dependencies:
-```bash
-npm install
-```
+### Prerequisites
+
+- **Node.js** 18+ and npm
+- **SQL Server** reachable from your machine (LocalDB, Express, or full SQL Server). Note your connection target — you'll need it for `SQLSERVER_HOST`.
+- **ODBC Driver 17 for SQL Server** installed locally. Download from Microsoft if not already present.
+- **Windows authentication** is the assumed mode. SQL authentication can be added by populating `username` / `password` on the environment config.
+
+### Setup
+
+1. Clone the repo and install dependencies:
+   ```bash
+   npm install
+   ```
 
 2. Build the project:
-```bash
-npm run build
-```
+   ```bash
+   npm run build
+   ```
 
-3. Configure in Claude Code's `.mcp.json`:
-```json
-{
-  "mcpServers": {
-    "sqlserver-agito": {
-      "command": "node",
-      "args": ["C:\\Users\\AttuulGeriyan\\Documents\\Claude\\sqlserver-agito-mcp\\build\\index.js"]
-    }
-  }
-}
-```
+3. Identify your SQL Server connection target. Common values:
+   - `(localdb)\MSSQLLocalDB` — default SQL Server LocalDB instance
+   - `(localdb)\SQLLocalEXP01` — a custom-named LocalDB instance
+   - `localhost` — default SQL Server install on the local machine
+   - `localhost\SQLEXPRESS` — SQL Server Express default
+
+   See `.env.example` for more examples.
+
+4. Configure the MCP in your Claude Code `.mcp.json`. Use a path that works on your machine and set `SQLSERVER_HOST` in the `env` block:
+
+   ```json
+   {
+     "mcpServers": {
+       "sqlserver-agito": {
+         "command": "node",
+         "args": ["<absolute-path-to-repo>/build/index.js"],
+         "env": {
+           "SQLSERVER_HOST": "(localdb)\\MSSQLLocalDB"
+         }
+       }
+     }
+   }
+   ```
+
+   On Windows, the path looks like `C:\\Users\\<you>\\path\\to\\sqlserver-agito-mcp\\build\\index.js`. On macOS / Linux, `/Users/<you>/path/to/sqlserver-agito-mcp/build/index.js`.
+
+5. (Optional) If the project-name resolver picks the wrong DB for any of your projects, add overrides:
+   ```json
+   "env": {
+     "SQLSERVER_HOST": "(localdb)\\MSSQLLocalDB",
+     "MCP_PROJECT_OVERRIDES": "{\"LegacyName\":\"MTMSomething\"}"
+   }
+   ```
+
+6. Restart Claude Code. On startup the MCP logs `Discovered N database(s) on LOCAL: ...` to stderr — verify it sees what you expect.
 
 ## Logging
 

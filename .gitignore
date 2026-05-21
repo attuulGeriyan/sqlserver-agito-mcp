@@ -4,5 +4,6 @@ logs/
 build/
 .env
 .env.*
+!.env.example
 nul
 .claude/

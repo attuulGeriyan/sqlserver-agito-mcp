@@ -1,4 +1,13 @@
-$connectionString = "Driver={ODBC Driver 17 for SQL Server};Server=(localdb)\SQLLocalEXP01;Database=TestRobot;Trusted_Connection=Yes;"
+$server = if ($env:SQLSERVER_HOST) { $env:SQLSERVER_HOST } else { $args[0] }
+$database = if ($env:SQLSERVER_DATABASE) { $env:SQLSERVER_DATABASE } elseif ($args[1]) { $args[1] } else { "master" }
+
+if (-not $server) {
+    Write-Host "Usage: \$env:SQLSERVER_HOST='<server>'; ./test-sql.ps1 [database]" -ForegroundColor Yellow
+    Write-Host "   or: ./test-sql.ps1 '<server>' [database]" -ForegroundColor Yellow
+    exit 1
+}
+
+$connectionString = "Driver={ODBC Driver 17 for SQL Server};Server=$server;Database=$database;Trusted_Connection=Yes;"
 
 Write-Host "Testing connection with:" -ForegroundColor Cyan
 Write-Host $connectionString -ForegroundColor Yellow
@@ -9,13 +18,14 @@ try {
     $conn.Open()
     Write-Host "✓ Connection successful!" -ForegroundColor Green
 
-    $cmd = New-Object System.Data.Odbc.OdbcCommand("SELECT TOP 5 LoadCarrierID, LoadCarrierType, Status FROM LoadCarriers", $conn)
+    $cmd = New-Object System.Data.Odbc.OdbcCommand("SELECT @@VERSION AS version, DB_NAME() AS [database]", $conn)
     $reader = $cmd.ExecuteReader()
 
     Write-Host ""
-    Write-Host "Sample data from LoadCarriers:" -ForegroundColor Cyan
+    Write-Host "Server info:" -ForegroundColor Cyan
     while ($reader.Read()) {
-        Write-Host "  LoadCarrierID: $($reader.GetValue(0)), Type: $($reader.GetValue(1)), Status: $($reader.GetValue(2))"
+        Write-Host "  Version:  $($reader.GetValue(0))"
+        Write-Host "  Database: $($reader.GetValue(1))"
     }
 
     $reader.Close()

@@ -5,10 +5,17 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-// Import core modules
+// Core
 import { getConnectionString } from "./core/connection.js";
+import { resolveProjectDatabases } from "./core/project-resolver.js";
+import {
+  discoverDatabases,
+  getDatabases,
+  refreshDatabases,
+  getEnvironment,
+} from "./config/environments.js";
 
-// Import tool definitions and handlers
+// Tool definitions and handlers
 import {
   readToolDefinitions,
   executeQuery,
@@ -42,11 +49,67 @@ import {
   generateTestData,
 } from "./tools/advanced-tools.js";
 
-// Server setup
+const DEFAULT_ENV = "LOCAL";
+
+// Discovery & resolution tools (built-in, not from tool modules)
+const discoveryToolDefinitions = [
+  {
+    name: "list_databases",
+    description:
+      "List all user databases discovered on the configured SQL Server. System databases (master, tempdb, model, msdb) are excluded.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        refresh: {
+          type: "boolean",
+          description: "If true, re-query sys.databases instead of returning the cached list (default: false).",
+        },
+      },
+    },
+  },
+  {
+    name: "resolve_project",
+    description:
+      "Resolve a project name (e.g. 'RobotiMaster') to its database (e.g. 'MTMRobot') plus shared DBs (MTMCore). Use this to verify which DB Claude should target before issuing tool calls.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: {
+          type: "string",
+          description: "Project name to resolve (e.g. 'RobotiMaster', 'HFGStack').",
+        },
+      },
+      required: ["project"],
+    },
+  },
+];
+
+// Resolve the target database for a tool call, honoring 'database' first, then 'project'.
+const resolveTargetDatabase = (args: Record<string, any> | undefined): string => {
+  const explicit = (args?.database as string | undefined)?.trim();
+  if (explicit) return explicit;
+
+  const project = (args?.project as string | undefined)?.trim();
+  if (project) {
+    const resolved = resolveProjectDatabases(project, getDatabases(DEFAULT_ENV));
+    if (!resolved.project) {
+      throw new Error(
+        `Could not resolve project '${project}' to a database. ${resolved.reasoning} ` +
+          `Available databases: ${getDatabases(DEFAULT_ENV).join(", ") || "(none discovered)"}.`
+      );
+    }
+    return resolved.project;
+  }
+
+  throw new Error(
+    "Missing 'database' or 'project'. Pass an exact database name, or pass a project name and let MCP resolve it."
+  );
+};
+
 const server = new Server(
   {
     name: "sqlserver-agito",
-    version: "0.3.0",
+    version: "0.4.0",
   },
   {
     capabilities: {
@@ -55,10 +118,10 @@ const server = new Server(
   }
 );
 
-// Tool definitions - combine all tool definitions
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
+      ...discoveryToolDefinitions,
       ...readToolDefinitions,
       ...writeToolDefinitions,
       ...advancedToolDefinitions,
@@ -66,16 +129,49 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
-// Tool execution handler
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
-    const dbName = (args?.database as string) || "TestRobot";
+    // Discovery tools — no database needed
+    if (name === "list_databases") {
+      const shouldRefresh = args?.refresh === true;
+      const dbs = shouldRefresh
+        ? await refreshDatabases(DEFAULT_ENV)
+        : getDatabases(DEFAULT_ENV);
+      const env = getEnvironment(DEFAULT_ENV);
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `Server: ${env.server}\n` +
+              `Environment: ${env.name}\n` +
+              `Databases (${dbs.length}):\n` +
+              (dbs.length ? dbs.map((d) => `  - ${d}`).join("\n") : "  (none)"),
+          },
+        ],
+      };
+    }
+
+    if (name === "resolve_project") {
+      const project = (args?.project as string)?.trim();
+      const resolved = resolveProjectDatabases(project, getDatabases(DEFAULT_ENV));
+      const lines = [
+        `Project:   ${project}`,
+        `Resolved:  ${resolved.project ?? "(no match)"}`,
+        `Shared:    ${resolved.shared.length ? resolved.shared.join(", ") : "(none)"}`,
+        `Reasoning: ${resolved.reasoning}`,
+      ];
+      return { content: [{ type: "text", text: lines.join("\n") }] };
+    }
+
+    // All other tools: resolve target DB then build conn string
+    const dbName = resolveTargetDatabase(args as Record<string, any> | undefined);
     const connString = getConnectionString(dbName);
 
-    // Read-only tools
     switch (name) {
+      // Read-only tools
       case "execute_query":
         return await executeQuery(connString, dbName, args?.query as string);
 
@@ -141,7 +237,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           args?.confirmed as boolean
         );
 
-      // Advanced tools - Phase 2+
+      // Advanced tools
       case "list_stored_procedures":
         return await listStoredProcedures(
           connString,
@@ -263,11 +359,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-// Start server
 async function main() {
+  // Discover databases up front so resolve / validation work immediately.
+  try {
+    const dbs = await discoverDatabases(DEFAULT_ENV);
+    console.error(`Discovered ${dbs.length} database(s) on ${DEFAULT_ENV}: ${dbs.join(", ")}`);
+  } catch (err) {
+    console.error(
+      `Warning: failed to discover databases on startup: ${err instanceof Error ? err.message : String(err)}. ` +
+        `Tools may fail until 'list_databases' (refresh=true) succeeds.`
+    );
+  }
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("SQL Server MCP server running on stdio (v0.3.0)");
+  console.error("SQL Server MCP server running on stdio (v0.4.0)");
 }
 
 main().catch((error) => {

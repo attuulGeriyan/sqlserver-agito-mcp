@@ -159,7 +159,7 @@ export const readToolDefinitions = [
   {
     name: "execute_query",
     description:
-      "Execute a SELECT query on TestRobot or WCSTest database. Read-only, safe for exploration.",
+      "Execute a SELECT query against the chosen database. Read-only, safe for exploration.",
     inputSchema: {
       type: "object",
       properties: {
@@ -169,8 +169,11 @@ export const readToolDefinitions = [
         },
         database: {
           type: "string",
-          enum: ["TestRobot", "WCSTest", "MTMCore", "MTMRobot", "MTMDHLScheduler", "MTMFives", "MTMERPTMS"],
-          description: "Which database to query (default: TestRobot)",
+          description: "Exact database name. Call list_databases to see what's available. If omitted, supply 'project' instead.",
+        },
+        project: {
+          type: "string",
+          description: "Project name (e.g. 'RobotiMaster'). MCP resolves it to the matching DB (e.g. 'MTMRobot'). Ignored when 'database' is supplied.",
         },
       },
       required: ["query"],
@@ -184,8 +187,11 @@ export const readToolDefinitions = [
       properties: {
         database: {
           type: "string",
-          enum: ["TestRobot", "WCSTest", "MTMCore", "MTMRobot", "MTMDHLScheduler", "MTMFives", "MTMERPTMS"],
-          description: "Which database to list tables from (default: TestRobot)",
+          description: "Exact database name. Call list_databases to see what's available. If omitted, supply 'project' instead.",
+        },
+        project: {
+          type: "string",
+          description: "Project name (e.g. 'RobotiMaster'). MCP resolves it to the matching DB (e.g. 'MTMRobot'). Ignored when 'database' is supplied.",
         },
       },
     },
@@ -203,8 +209,11 @@ export const readToolDefinitions = [
         },
         database: {
           type: "string",
-          enum: ["TestRobot", "WCSTest", "MTMCore", "MTMRobot", "MTMDHLScheduler", "MTMFives", "MTMERPTMS"],
-          description: "Which database the table is in (default: TestRobot)",
+          description: "Exact database name. Call list_databases to see what's available. If omitted, supply 'project' instead.",
+        },
+        project: {
+          type: "string",
+          description: "Project name (e.g. 'RobotiMaster'). MCP resolves it to the matching DB (e.g. 'MTMRobot'). Ignored when 'database' is supplied.",
         },
       },
       required: ["table_name"],
@@ -223,8 +232,11 @@ export const readToolDefinitions = [
         },
         database: {
           type: "string",
-          enum: ["TestRobot", "WCSTest", "MTMCore", "MTMRobot", "MTMDHLScheduler", "MTMFives", "MTMERPTMS"],
-          description: "Which database to query (default: TestRobot)",
+          description: "Exact database name. Call list_databases to see what's available. If omitted, supply 'project' instead.",
+        },
+        project: {
+          type: "string",
+          description: "Project name (e.g. 'RobotiMaster'). MCP resolves it to the matching DB (e.g. 'MTMRobot'). Ignored when 'database' is supplied.",
         },
       },
     },
@@ -246,8 +258,11 @@ export const readToolDefinitions = [
         },
         database: {
           type: "string",
-          enum: ["TestRobot", "WCSTest", "MTMCore", "MTMRobot", "MTMDHLScheduler", "MTMFives", "MTMERPTMS"],
-          description: "Which database the table is in (default: TestRobot)",
+          description: "Exact database name. Call list_databases to see what's available. If omitted, supply 'project' instead.",
+        },
+        project: {
+          type: "string",
+          description: "Project name (e.g. 'RobotiMaster'). MCP resolves it to the matching DB (e.g. 'MTMRobot'). Ignored when 'database' is supplied.",
         },
       },
       required: ["table_name"],
