@@ -569,57 +569,104 @@ const TRUNCATE_WHITELIST = [
 ### Prerequisites
 
 - **Node.js** 18+ and npm
+- **Claude Code** CLI installed (`npm install -g @anthropic-ai/claude-code`)
 - **SQL Server** reachable from your machine (LocalDB, Express, or full SQL Server). Note your connection target — you'll need it for `SQLSERVER_HOST`.
-- **ODBC Driver 17 for SQL Server** installed locally. Download from Microsoft if not already present.
+- **ODBC Driver 17 for SQL Server** installed locally. Download from [Microsoft](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server) if not already present.
 - **Windows authentication** is the assumed mode. SQL authentication can be added by populating `username` / `password` on the environment config.
 
 ### Setup
 
-1. Clone the repo and install dependencies:
-   ```bash
-   npm install
-   ```
+**1. Clone and build**
 
-2. Build the project:
-   ```bash
-   npm run build
-   ```
+```bash
+git clone https://github.com/attuulGeriyan/sqlserver-agito-mcp.git
+cd sqlserver-agito-mcp
+npm install
+npm run build
+```
 
-3. Identify your SQL Server connection target. Common values:
-   - `(localdb)\MSSQLLocalDB` — default SQL Server LocalDB instance
-   - `(localdb)\SQLLocalEXP01` — a custom-named LocalDB instance
-   - `localhost` — default SQL Server install on the local machine
-   - `localhost\SQLEXPRESS` — SQL Server Express default
+**2. Find your SQL Server connection target**
 
-   See `.env.example` for more examples.
+Common values for `SQLSERVER_HOST`:
 
-4. Configure the MCP in your Claude Code `.mcp.json`. Use a path that works on your machine and set `SQLSERVER_HOST` in the `env` block:
+| Value | When to use |
+|---|---|
+| `(localdb)\MSSQLLocalDB` | Default SQL Server LocalDB instance |
+| `(localdb)\SQLLocalEXP01` | Custom-named LocalDB instance |
+| `localhost` | Full SQL Server install on local machine |
+| `localhost\SQLEXPRESS` | SQL Server Express default instance |
 
-   ```json
-   {
-     "mcpServers": {
-       "sqlserver-agito": {
-         "command": "node",
-         "args": ["<absolute-path-to-repo>/build/index.js"],
-         "env": {
-           "SQLSERVER_HOST": "(localdb)\\MSSQLLocalDB"
-         }
-       }
-     }
-   }
-   ```
+Not sure what instance you have? Run this in PowerShell:
+```powershell
+sqllocaldb info
+```
 
-   On Windows, the path looks like `C:\\Users\\<you>\\path\\to\\sqlserver-agito-mcp\\build\\index.js`. On macOS / Linux, `/Users/<you>/path/to/sqlserver-agito-mcp/build/index.js`.
+See `.env.example` for more examples and formats.
 
-5. (Optional) If the project-name resolver picks the wrong DB for any of your projects, add overrides:
-   ```json
-   "env": {
-     "SQLSERVER_HOST": "(localdb)\\MSSQLLocalDB",
-     "MCP_PROJECT_OVERRIDES": "{\"LegacyName\":\"MTMSomething\"}"
-   }
-   ```
+**3. Register the MCP server globally in Claude Code**
 
-6. Restart Claude Code. On startup the MCP logs `Discovered N database(s) on LOCAL: ...` to stderr — verify it sees what you expect.
+Run this command, replacing the path and host with your own:
+
+```bash
+# Windows
+claude mcp add -s user -e "SQLSERVER_HOST=(localdb)\MSSQLLocalDB" sqlserver-agito -- node "C:\path\to\sqlserver-agito-mcp\build\index.js"
+
+# macOS / Linux
+claude mcp add -s user -e "SQLSERVER_HOST=localhost" sqlserver-agito -- node "/path/to/sqlserver-agito-mcp/build/index.js"
+```
+
+The `-s user` flag makes it available **globally across all your projects** — you only need to do this once.
+
+Verify it connected:
+```bash
+claude mcp get sqlserver-agito
+```
+
+You should see `Status: ✓ Connected` and `SQLSERVER_HOST=...` listed under Environment.
+
+**4. Restart Claude Code**
+
+On startup the MCP logs to stderr:
+```
+Discovered N database(s) on LOCAL: DatabaseA, DatabaseB, ...
+```
+
+If you see this, you're good to go. Run the `list_databases` tool inside Claude Code to confirm.
+
+---
+
+### Optional: Project-level setup (alternative to global)
+
+If you prefer to configure per-project rather than globally, add a `.mcp.json` to your project root instead of using `claude mcp add`:
+
+```json
+{
+  "mcpServers": {
+    "sqlserver-agito": {
+      "command": "node",
+      "args": ["C:\\path\\to\\sqlserver-agito-mcp\\build\\index.js"],
+      "env": {
+        "SQLSERVER_HOST": "(localdb)\\MSSQLLocalDB"
+      }
+    }
+  }
+}
+```
+
+---
+
+### Optional: Project-name overrides
+
+If the automatic project→database resolver picks the wrong DB for a project, force it with `MCP_PROJECT_OVERRIDES`:
+
+```bash
+claude mcp add -s user \
+  -e "SQLSERVER_HOST=(localdb)\MSSQLLocalDB" \
+  -e "MCP_PROJECT_OVERRIDES={\"LegacyName\":\"MTMSomething\"}" \
+  sqlserver-agito -- node "C:\path\to\sqlserver-agito-mcp\build\index.js"
+```
+
+Use the `resolve_project` tool inside Claude Code to preview how any project name resolves before relying on it.
 
 ## Logging
 
