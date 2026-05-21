@@ -1,0 +1,384 @@
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
+import sql from "mssql";
+import msnodesqlv8 from "mssql/msnodesqlv8.js";
+
+// SQL Server connection configuration for LocalDB
+// Using msnodesqlv8 driver which supports Windows Authentication and LocalDB
+const connectionString = "Driver={ODBC Driver 17 for SQL Server};Server=(localdb)\\SQLLocalEXP01;Database=TestRobot;Trusted_Connection=Yes;";
+
+// Create connection pool
+let pool: any = null;
+
+async function getPool(): Promise<any> {
+  if (!pool) {
+    pool = await msnodesqlv8.connect(connectionString);
+  }
+  return pool;
+}
+
+// Server setup
+const server = new Server(
+  {
+    name: "sqlserver-agito",
+    version: "0.1.0",
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  }
+);
+
+// Tool definitions
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      {
+        name: "execute_query",
+        description:
+          "Execute a SELECT query on TestRobot or WCSTest database. Read-only, safe for exploration.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "The SELECT SQL query to execute",
+            },
+            database: {
+              type: "string",
+              enum: ["TestRobot", "WCSTest"],
+              description: "Which database to query (default: TestRobot)",
+            },
+          },
+          required: ["query"],
+        },
+      },
+      {
+        name: "list_tables",
+        description: "List all tables in the specified database",
+        inputSchema: {
+          type: "object",
+          properties: {
+            database: {
+              type: "string",
+              enum: ["TestRobot", "WCSTest"],
+              description: "Which database to list tables from (default: TestRobot)",
+            },
+          },
+        },
+      },
+      {
+        name: "describe_table",
+        description:
+          "Get detailed schema information for a specific table including columns, data types, and constraints",
+        inputSchema: {
+          type: "object",
+          properties: {
+            table_name: {
+              type: "string",
+              description: "Name of the table to describe",
+            },
+            database: {
+              type: "string",
+              enum: ["TestRobot", "WCSTest"],
+              description: "Which database the table is in (default: TestRobot)",
+            },
+          },
+          required: ["table_name"],
+        },
+      },
+      {
+        name: "show_foreign_keys",
+        description:
+          "Show all foreign key relationships for a table or entire database",
+        inputSchema: {
+          type: "object",
+          properties: {
+            table_name: {
+              type: "string",
+              description: "Optional: specific table name. If omitted, shows all FKs",
+            },
+            database: {
+              type: "string",
+              enum: ["TestRobot", "WCSTest"],
+              description: "Which database to query (default: TestRobot)",
+            },
+          },
+        },
+      },
+      {
+        name: "get_sample_data",
+        description:
+          "Get sample rows from a table to understand the data structure",
+        inputSchema: {
+          type: "object",
+          properties: {
+            table_name: {
+              type: "string",
+              description: "Name of the table",
+            },
+            limit: {
+              type: "number",
+              description: "Number of rows to return (default: 10, max: 100)",
+            },
+            database: {
+              type: "string",
+              enum: ["TestRobot", "WCSTest"],
+              description: "Which database the table is in (default: TestRobot)",
+            },
+          },
+          required: ["table_name"],
+        },
+      },
+    ],
+  };
+});
+
+// Tool execution
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  try {
+    const dbName = (args?.database as string) || "TestRobot";
+    const currentPool = await getPool();
+
+    // Switch database if needed
+    await currentPool.request().query(`USE [${dbName}]`);
+
+    switch (name) {
+      case "execute_query": {
+        const query = args?.query as string;
+
+        // Safety check: only allow SELECT queries
+        const trimmedQuery = query.trim().toUpperCase();
+        if (!trimmedQuery.startsWith("SELECT")) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Error: Only SELECT queries are allowed in read-only mode.",
+              },
+            ],
+          };
+        }
+
+        const result = await currentPool.request().query(query);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  rowCount: result.recordset.length,
+                  data: result.recordset,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      case "list_tables": {
+        const result = await currentPool.request().query(`
+          SELECT TABLE_SCHEMA, TABLE_NAME 
+          FROM INFORMATION_SCHEMA.TABLES 
+          WHERE TABLE_TYPE = 'BASE TABLE'
+          ORDER BY TABLE_SCHEMA, TABLE_NAME
+        `);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  database: dbName,
+                  tables: result.recordset,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      case "describe_table": {
+        const tableName = args?.table_name as string;
+
+        const columns = await currentPool.request()
+          .input("tableName", sql.NVarChar, tableName)
+          .query(`
+            SELECT 
+              COLUMN_NAME,
+              DATA_TYPE,
+              CHARACTER_MAXIMUM_LENGTH,
+              NUMERIC_PRECISION,
+              NUMERIC_SCALE,
+              IS_NULLABLE,
+              COLUMN_DEFAULT,
+              ORDINAL_POSITION
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_NAME = @tableName
+            ORDER BY ORDINAL_POSITION
+          `);
+
+        const constraints = await currentPool.request()
+          .input("tableName", sql.NVarChar, tableName)
+          .query(`
+            SELECT 
+              tc.CONSTRAINT_NAME,
+              tc.CONSTRAINT_TYPE,
+              kcu.COLUMN_NAME
+            FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+            JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+              ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
+            WHERE tc.TABLE_NAME = @tableName
+          `);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  database: dbName,
+                  table: tableName,
+                  columns: columns.recordset,
+                  constraints: constraints.recordset,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      case "show_foreign_keys": {
+        const tableName = args?.table_name as string;
+
+        let query = `
+          SELECT 
+            fk.name AS ForeignKey,
+            OBJECT_NAME(fk.parent_object_id) AS TableName,
+            COL_NAME(fkc.parent_object_id, fkc.parent_column_id) AS ColumnName,
+            OBJECT_NAME(fk.referenced_object_id) AS ReferencedTable,
+            COL_NAME(fkc.referenced_object_id, fkc.referenced_column_id) AS ReferencedColumn
+          FROM sys.foreign_keys fk
+          INNER JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+        `;
+
+        if (tableName) {
+          query += ` WHERE OBJECT_NAME(fk.parent_object_id) = @tableName`;
+          const result = await currentPool
+            .request()
+            .input("tableName", sql.NVarChar, tableName)
+            .query(query);
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    database: dbName,
+                    table: tableName,
+                    foreignKeys: result.recordset,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        } else {
+          const result = await currentPool.request().query(query);
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    database: dbName,
+                    allForeignKeys: result.recordset,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
+      }
+
+      case "get_sample_data": {
+        const tableName = args?.table_name as string;
+        const limit = Math.min((args?.limit as number) || 10, 100);
+
+        const result = await currentPool.request()
+          .input("tableName", sql.NVarChar, tableName)
+          .query(`SELECT TOP ${limit} * FROM [${tableName}]`);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  database: dbName,
+                  table: tableName,
+                  rowCount: result.recordset.length,
+                  sampleData: result.recordset,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      default:
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Unknown tool: ${name}`,
+            },
+          ],
+        };
+    }
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+});
+
+// Start server
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("SQL Server MCP server running on stdio");
+}
+
+main().catch((error) => {
+  console.error("Fatal error:", error);
+  process.exit(1);
+});

@@ -1,0 +1,29 @@
+{
+  "name": "sqlserver-agito-mcp",
+  "version": "0.3.0",
+  "description": "MCP server for SQL Server - Agito Robot Project (Phase 3: Advanced Operations)",
+  "type": "module",
+  "main": "build/index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "start": "node build/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "sqlserver",
+    "agito"
+  ],
+  "author": "Attuul Geriyan",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "msnodesqlv8": "^5.1.1",
+    "mssql": "^11.0.1"
+  },
+  "devDependencies": {
+    "@types/mssql": "^9.1.5",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
